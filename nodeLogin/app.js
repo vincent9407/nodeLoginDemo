@@ -1,60 +1,65 @@
 var express = require('express');
-var path = require('path');
-var favicon = require('serve-favicon');
-var logger = require('morgan');
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
-
-var routes = require('./routes/index');
-var users = require('./routes/users');
+//添加http模块
+var http = require('http');
+//添加session
+var session = require('express-session');
+//添加错误处理中间件
+var errorHandler = require('errorHandler');
+//添加mongoStore
+var MongoStore = require('connect-mongo')(session);
 
 var app = express();
 
+//使用express + jade默认输出一行HTML
+app.locals.pretty = true;
+
+//设置端口号
+app.set('port',process.env.PORT || 3000);
+
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'ejs');
+app.set('view engine', 'jade');
 
-// uncomment after placing your favicon in /public
-//app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
-app.use(logger('dev'));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/', routes);
-app.use('/users', users);
+app.use(bodyParser.join());
 
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  var err = new Error('Not Found');
-  err.status = 404;
-  next(err);
-});
+//返回对象的一个键值对,如果是false键值对中的值就是String或者Array,反之则为任何数据类型
+app.use(bodyParser.urlencoded({extended: true}));
 
-// error handlers
+//使用stylus构建CSS文件
+app.use(require('stylus').middleware({src: __dirname + '/app/public'}));
 
-// development error handler
-// will print stacktrace
-if (app.get('env') === 'development') {
-  app.use(function(err, req, res, next) {
-    res.status(err.status || 500);
-    res.render('error', {
-      message: err.message,
-      error: err
-    });
-  });
+//告知express静态文件的路径
+app.use(express.static(__dirname + '/app/public'));
+
+//创建mongo需要的元素
+var dbHost = process.env.DB_HOST || 'localhost';
+
+var dbPort = process.env.DB_PORT || 27017;
+
+var dbName = process.env.DB_NAME || 'node-login';
+
+var dbURL = 'mongodb://'+dbHost+':'+dbPort+'/'+dbName;
+
+if(app.get('env') == 'live'){
+  dbURL = 'mongodb://'+process.env.DB_USER+':'+process.env.DB_PASS+'@'+dbHost+':'+dbPort+'/'+dbName;
 }
 
-// production error handler
-// no stacktraces leaked to user
-app.use(function(err, req, res, next) {
-  res.status(err.status || 500);
-  res.render('error', {
-    message: err.message,
-    error: {}
-  });
+
+app.use(session({
+  secret: '12345',
+  proxy: true,
+  resave: true,
+  saveUninitialized: true,
+  store: new MongoStore({ url: dbURL })
+})
+);
+
+require('./app/server/routes')(app);
+
+http.createServer(app).listen(app.get('port'),function () {
+  console.log('Express start server,listening on port' + app.get('port'));
 });
-
-
-module.exports = app;
